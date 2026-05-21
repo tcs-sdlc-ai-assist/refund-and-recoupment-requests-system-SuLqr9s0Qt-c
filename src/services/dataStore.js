@@ -25,6 +25,17 @@ function isStorageAvailable() {
 const storageAvailable = isStorageAvailable();
 
 /**
+ * Strips newlines and control characters from a value before logging
+ * to prevent log injection attacks.
+ * @param {*} val - The value to sanitize.
+ * @returns {string} A sanitized string safe for log output.
+ */
+function sanitizeLogValue(val) {
+  if (typeof val !== 'string') return String(val);
+  return val.replace(/[\r\n\t\x00-\x1F\x7F]/g, '_');
+}
+
+/**
  * Core localStorage abstraction layer.
  * Provides JSON serialization/deserialization, error handling,
  * storage availability detection, and initial data seeding.
@@ -36,6 +47,10 @@ const DataStore = {
    * @returns {Array<Object>} The parsed array, or an empty array if not found or on error.
    */
   getEntity(key) {
+    if (typeof key !== 'string' || !/^[a-zA-Z0-9_\-]+$/.test(key)) {
+      console.error('DataStore: Invalid key provided to getEntity.');
+      return [];
+    }
     if (!storageAvailable) {
       console.error('DataStore: localStorage is not available.');
       return [];
@@ -48,12 +63,12 @@ const DataStore = {
       }
       const parsed = JSON.parse(raw);
       if (!Array.isArray(parsed)) {
-        console.warn(`DataStore: Expected array for key "${key}", got ${typeof parsed}. Returning empty array.`);
+        console.warn('DataStore: Expected array for key, got unexpected type. Returning empty array.', { key: sanitizeLogValue(key), type: typeof parsed });
         return [];
       }
       return parsed;
     } catch (e) {
-      console.error(`DataStore: Failed to read key "${key}" from localStorage.`, e);
+      console.error('DataStore: Failed to read key from localStorage.', { key: sanitizeLogValue(key) }, e);
       return [];
     }
   },
@@ -66,6 +81,10 @@ const DataStore = {
    * @returns {boolean} True if the write succeeded, false otherwise.
    */
   setEntity(key, data) {
+    if (typeof key !== 'string' || !/^[a-zA-Z0-9_\-]+$/.test(key)) {
+      console.error('DataStore: Invalid key provided to setEntity.');
+      return false;
+    }
     if (!storageAvailable) {
       console.error('DataStore: localStorage is not available.');
       return false;
@@ -81,7 +100,7 @@ const DataStore = {
         return true;
       } catch (e) {
         attempt++;
-        console.warn(`DataStore: Write attempt ${attempt} failed for key "${key}".`, e);
+        console.warn('DataStore: Write attempt failed for key.', { attempt, key: sanitizeLogValue(key) }, e);
         if (attempt < maxRetries) {
           const delay = Math.pow(2, attempt) * 50;
           const start = Date.now();
@@ -92,7 +111,7 @@ const DataStore = {
       }
     }
 
-    console.error(`DataStore: Failed to write key "${key}" after ${maxRetries} attempts.`);
+    console.error('DataStore: Failed to write key after max retries.', { key: sanitizeLogValue(key), maxRetries });
     return false;
   },
 
@@ -102,6 +121,10 @@ const DataStore = {
    * @returns {boolean} True if the removal succeeded, false otherwise.
    */
   removeEntity(key) {
+    if (typeof key !== 'string' || !/^[a-zA-Z0-9_\-]+$/.test(key)) {
+      console.error('DataStore: Invalid key provided to removeEntity.');
+      return false;
+    }
     if (!storageAvailable) {
       console.error('DataStore: localStorage is not available.');
       return false;
@@ -111,7 +134,7 @@ const DataStore = {
       localStorage.removeItem(key);
       return true;
     } catch (e) {
-      console.error(`DataStore: Failed to remove key "${key}" from localStorage.`, e);
+      console.error('DataStore: Failed to remove key from localStorage.', { key: sanitizeLogValue(key) }, e);
       return false;
     }
   },
